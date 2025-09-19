@@ -1,2 +1,2 @@
 # SAMP-Packet-Dumper
-SAMP Packet Dumper with unKyretardizedatagram
+SA:MP Packet Dumper with unKyretardizedatagram
