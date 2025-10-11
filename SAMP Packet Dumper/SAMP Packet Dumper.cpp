@@ -28,7 +28,7 @@ unsigned char sampDecrTable[256] =
     0x6C, 0x70, 0x08, 0x99, 0x45, 0x56, 0x76, 0xF9, 0x9A, 0x97, 0x19, 0x72, 0x5C, 0x02, 0x8F, 0x58
 };
 
-void unKyretardizedatagram(unsigned char* buf, int len, int port, int unk)
+void samp_decrypt(unsigned char* buf, int len, int port, int unk)
 {
     unsigned char bChecksumEncr = buf[0];
 
@@ -63,7 +63,7 @@ void unKyretardizedatagram(unsigned char* buf, int len, int port, int unk)
         printf("[WARNING] Invalid checksum: bChecksum %d != bChecksumEncr %d\n", bChecksum, bChecksumEncr);
 }
 
-void packet_dump(const unsigned char* data, size_t size) {
+void pkt_dump(const unsigned char* data, size_t size) {
     for (size_t i = 0; i < size; i++) {
         if (i % 16 == 0 && i > 0)
             std::cout << std::endl;
@@ -78,88 +78,88 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const char* localIpAddress = argv[1];
-    int localPort = std::stoi(argv[2]);
-    const char* remoteIpAddress = argv[3];
-    int remotePort = std::stoi(argv[4]);
+    const char* localip = argv[1];
+    int localport = std::stoi(argv[2]);
+    const char* remoteip = argv[3];
+    int remoteport = std::stoi(argv[4]);
 
-    WSADATA wsaData;
-    SOCKET recvSock, sendSock;
-    sockaddr_in localAddr, remoteAddr;
-    char buffer[1024];
-    int remoteAddrSize = sizeof(remoteAddr);
+    WSADATA wsadata;
+    SOCKET recvsock, sendsock;
+    sockaddr_in localaddr, remoteaddr;
+    char buff[1024];
+    int remoteaddrsize = sizeof(remoteaddr);
 
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &wsadata) != 0) {
         std::cerr << "wsastartup failed with error" << std::endl;
         return 1;
     }
 
-    if ((recvSock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
+    if ((recvsock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
         std::cerr << "socket creation failed with error: " << WSAGetLastError() << std::endl;
         WSACleanup();
         return 1;
     }
 
-    memset(&localAddr, 0, sizeof(localAddr));
-    localAddr.sin_family = AF_INET;
-    inet_pton(AF_INET, localIpAddress, &localAddr.sin_addr);
-    localAddr.sin_port = htons(localPort);
+    memset(&localaddr, 0, sizeof(localaddr));
+    localaddr.sin_family = AF_INET;
+    inet_pton(AF_INET, localip, &localaddr.sin_addr);
+    localaddr.sin_port = htons(localport);
 
-    if (bind(recvSock, (struct sockaddr*)&localAddr, sizeof(localAddr)) == SOCKET_ERROR) {
+    if (bind(recvsock, (struct sockaddr*)&localaddr, sizeof(localaddr)) == SOCKET_ERROR) {
         std::cerr << "bind failed: " << WSAGetLastError() << std::endl;
-        closesocket(recvSock);
+        closesocket(recvsock);
         WSACleanup();
         return 1;
     }
 
-    if ((sendSock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
+    if ((sendsock = socket(AF_INET, SOCK_DGRAM, 0)) == INVALID_SOCKET) {
         std::cerr << "socket creation failed with error: " << WSAGetLastError() << std::endl;
-        closesocket(recvSock);
+        closesocket(recvsock);
         WSACleanup();
         return 1;
     }
 
-    memset(&remoteAddr, 0, sizeof(remoteAddr));
-    remoteAddr.sin_family = AF_INET;
-    inet_pton(AF_INET, remoteIpAddress, &remoteAddr.sin_addr);
-    remoteAddr.sin_port = htons(remotePort);
+    memset(&remoteaddr, 0, sizeof(remoteaddr));
+    remoteaddr.sin_family = AF_INET;
+    inet_pton(AF_INET, remoteip, &remoteaddr.sin_addr);
+    remoteaddr.sin_port = htons(remoteport);
 
-    std::cout << "waiting for packet on " << localIpAddress << ":" << localPort << "..." << std::endl;
+    std::cout << "waiting for packet on " << localip << ":" << localport << "..." << std::endl;
 
     while (true) {
-        int recv_len = recvfrom(recvSock, buffer, sizeof(buffer), 0, (struct sockaddr*)&remoteAddr, &remoteAddrSize);
+        int recv_len = recvfrom(recvsock, buff, sizeof(buff), 0, (struct sockaddr*)&remoteaddr, &remoteaddrsize);
         if (recv_len == SOCKET_ERROR) {
             std::cerr << "recvfrom failed with error: " << WSAGetLastError() << std::endl;
             break;
         }
 
         char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &remoteAddr.sin_addr, client_ip, INET_ADDRSTRLEN);
+        inet_ntop(AF_INET, &remoteaddr.sin_addr, client_ip, INET_ADDRSTRLEN);
 
-        std::cout << "received packet from " << client_ip << ":" << ntohs(remoteAddr.sin_port) << std::endl;
+        std::cout << "received packet from " << client_ip << ":" << ntohs(remoteaddr.sin_port) << std::endl;
 
-        unsigned char* data_copy = new unsigned char[recv_len];
-        std::memcpy(data_copy, buffer, recv_len);
-        unKyretardizedatagram(data_copy, recv_len, ntohs(remoteAddr.sin_port), 0);
+        unsigned char* dumpdata = new unsigned char[recv_len];
+        std::memcpy(dumpdata, buff, recv_len);
+        samp_decrypt(dumpdata, recv_len, ntohs(remoteaddr.sin_port), 0);
 
         std::cout << "decrypted data: ";
         for (size_t i = 0; i < recv_len; ++i) {
-            std::cout << (char)data_copy[i];
+            std::cout << (char)dumpdata[i];
         }
         std::cout << std::endl;
 
         std::cout << "packet dump:" << std::endl;
-        packet_dump(data_copy, recv_len);
+        pkt_dump(dumpdata, recv_len);
 
-        if (sendto(sendSock, (const char*)data_copy, recv_len, 0, (struct sockaddr*)&remoteAddr, remoteAddrSize) == SOCKET_ERROR) {
+        if (sendto(sendsock, (const char*)dumpdata, recv_len, 0, (struct sockaddr*)&remoteaddr, remoteaddrsize) == SOCKET_ERROR) {
             std::cerr << "sendto failed with error: " << WSAGetLastError() << std::endl;
         }
 
-        delete[] data_copy;
+        delete[] dumpdata;
     }
 
-    closesocket(recvSock);
-    closesocket(sendSock);
+    closesocket(recvsock);
+    closesocket(sendsock);
     WSACleanup();
     return 0;
 }
